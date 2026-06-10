@@ -35,11 +35,33 @@ const app = express();
 
 // Dynamic CORS whitelist
 const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-  : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim().toLowerCase())
+  : [];
 
 app.use(cors({
-  origin: allowedOrigins,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, postman, server-to-server)
+    if (!origin) return callback(null, true);
+    
+    const normalizedOrigin = origin.toLowerCase();
+    
+    // Check if ALLOWED_ORIGINS is empty/undefined or contains * (allowing all for setup/guest access)
+    if (!process.env.ALLOWED_ORIGINS || allowedOrigins.length === 0 || allowedOrigins.includes('*')) {
+      return callback(null, true);
+    }
+    
+    if (
+      allowedOrigins.includes(normalizedOrigin) ||
+      normalizedOrigin.startsWith('http://localhost:') ||
+      normalizedOrigin.startsWith('http://127.0.0.1:') ||
+      normalizedOrigin.endsWith('.vercel.app')
+    ) {
+      return callback(null, true);
+    }
+    
+    console.warn(`[CORS] Origin ${origin} not in whitelist. Blocked.`);
+    return callback(new Error('Not allowed by CORS'));
+  },
   credentials: true
 }));
 

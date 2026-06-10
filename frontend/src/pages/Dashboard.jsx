@@ -337,14 +337,6 @@ export default function Dashboard() {
     setHistoryPage(1);
   };
 
-  // Early return after all hooks are declared
-  if (isLoading || !currentStock) {
-    return <DashboardSkeleton />;
-  }
-
-  const { name, price, change, changePercent, high, low, open, volume, marketCap, peRatio, dividendYield, chartData, technicals, sentiment, aiPrediction } = currentStock;
-  const isUp = change >= 0;
-
   // News Sentiment Stats computed from actual fetched articles
   const newsSentimentStats = useMemo(() => {
     if (!news || news.length === 0) {
@@ -376,12 +368,20 @@ export default function Dashboard() {
       };
     }
     return {
-      positive: sentiment?.positive || 50,
-      negative: sentiment?.negative || 20,
-      neutral: sentiment?.neutral || 30,
-      explanation: sentiment?.explanation || 'Market news sentiment currently neutral.'
+      positive: currentStock?.sentiment?.positive || 50,
+      negative: currentStock?.sentiment?.negative || 20,
+      neutral: currentStock?.sentiment?.neutral || 30,
+      explanation: currentStock?.sentiment?.explanation || 'Market news sentiment currently neutral.'
     };
-  }, [news, newsSentimentStats, sentiment, symbol]);
+  }, [news, newsSentimentStats, currentStock?.sentiment, symbol]);
+
+  // Early return after all hooks are declared
+  if (isLoading || !currentStock) {
+    return <DashboardSkeleton />;
+  }
+
+  const { name, price, change, changePercent, high, low, open, volume, marketCap, peRatio, dividendYield, chartData, technicals, sentiment, aiPrediction } = currentStock;
+  const isUp = change >= 0;
 
   // Selected Stock chart timeframe points
   const activeChartData = chartData[activeTimeframe] || chartData['1W'];
