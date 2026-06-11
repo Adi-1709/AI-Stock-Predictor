@@ -12,6 +12,10 @@ if (!admin.apps.length) {
   });
 }
 
+// Firestore Database
 const db = admin.firestore();
 
-export { db };
+// Firebase Auth
+const auth = admin.auth();
+
+export { db, auth };
