@@ -1,4 +1,6 @@
-import admin from "firebase-admin";
+import { initializeApp, cert, getApps } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
 
 const serviceAccount = {
   projectId: process.env.FIREBASE_PROJECT_ID,
@@ -6,16 +8,18 @@ const serviceAccount = {
   privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
 };
 
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
-}
+// Initialize Firebase only once
+const app =
+  getApps().length === 0
+    ? initializeApp({
+      credential: cert(serviceAccount),
+    })
+    : getApps()[0];
 
 // Firestore Database
-const db = admin.firestore();
+const db = getFirestore(app);
 
 // Firebase Auth
-const auth = admin.auth();
+const auth = getAuth(app);
 
 export { db, auth };
