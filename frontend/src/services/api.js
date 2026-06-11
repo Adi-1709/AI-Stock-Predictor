@@ -5,7 +5,7 @@ const api = axios.create({
     import.meta.env.VITE_API_URL ||
     'https://ai-stock-backend-25oq.onrender.com/api',
 
-  timeout: 15000,
+  timeout: 30000, // increase timeout
 
   headers: {
     'Content-Type': 'application/json',
@@ -18,14 +18,10 @@ api.interceptors.request.use(
     const user = localStorage.getItem('user');
 
     if (user) {
-      try {
-        const parsedUser = JSON.parse(user);
+      const parsedUser = JSON.parse(user);
 
-        config.headers.Authorization =
-          `Bearer mock - jwt - token -for-${ parsedUser.email }`;
-      } catch (error) {
-        console.error('User parse error:', error);
-      }
+      config.headers.Authorization =
+        `Bearer mock-jwt-token-for-${parsedUser.email}`;
     }
 
     return config;
@@ -36,22 +32,13 @@ api.interceptors.request.use(
 // Response interceptor
 api.interceptors.response.use(
   (response) => response,
+
   (error) => {
     if (error.response?.status === 401) {
-      const publicPaths = [
-        '/login',
-        '/register',
-        '/forgot-password',
-        '/'
-      ];
-
-      const currentPath = window.location.pathname;
 
       localStorage.removeItem('user');
 
-      if (!publicPaths.includes(currentPath)) {
-        window.location.href = '/login';
-      }
+      window.location.href = '/login';
     }
 
     return Promise.reject(error);
