@@ -3,7 +3,7 @@ import React, {
   useMemo,
   useEffect
 } from 'react';
-import { predictStock } from '../services/predictionService.js';
+import { predictStock } from '../services/predictService.js';
 import api from '../services/api.js';
 import { useStockData } from '../hooks/useStockData';
 import { useStock } from '../context/StockContext';
