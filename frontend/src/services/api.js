@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  baseURL: import.meta.env.VITE_API_URL || 'http://import.meta.env.VITE_API_URL/api',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -31,9 +31,9 @@ api.interceptors.response.use(
     if (error.response && error.response.status === 401) {
       const publicPaths = ['/login', '/register', '/forgot-password', '/'];
       const currentPath = window.location.pathname;
-      
+
       localStorage.removeItem('user');
-      
+
       if (!publicPaths.includes(currentPath)) {
         window.location.href = '/login';
       }

@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = "http://localhost:8000";
+const API_URL = import.meta.env.VITE_ML_API_URL;
 
 export const predictStock = async (ticker) => {
     try {
@@ -9,13 +9,8 @@ export const predictStock = async (ticker) => {
         );
 
         return response.data;
-
     } catch (error) {
-        console.error(
-            "Prediction error:",
-            error
-        );
-
+        console.error("Prediction error:", error);
         throw error;
     }
 };
