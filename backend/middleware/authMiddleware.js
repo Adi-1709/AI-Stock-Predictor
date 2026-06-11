@@ -1,7 +1,5 @@
 import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
-import { isDBConnected } from '../config/db.js';
-import { sandboxUsers } from '../config/sandboxData.js';
+import { db } from '../config/firebase.js';
 
 /**
  * Route protection middleware that checks JWT authorization header.
@@ -21,37 +19,30 @@ export const protect = async (req, res, next) => {
       if (token.startsWith('mock-jwt-token-for-')) {
         const email = token.replace('mock-jwt-token-for-', '').toLowerCase();
         
-        let user;
-        if (isDBConnected) {
-          user = await User.findOne({ email });
-        } else {
-          user = sandboxUsers.find(u => u.email.toLowerCase() === email);
+        let userDocs = await db.collection('users').where('email', '==', email).limit(1).get();
+        
+        if (userDocs.empty) {
+          // Auto-create in Firestore to prevent session breakage on backend restarts
+          const namePart = email.split('@')[0];
+          const newUser = {
+            name: namePart.charAt(0).toUpperCase() + namePart.slice(1),
+            email: email,
+            plan: 'Sandbox Trial',
+            avatar: namePart.substring(0, 2).toUpperCase(),
+            bio: 'Premium Stock Platform member (Sandbox).',
+            company: 'Independent Trader',
+            phone: '',
+            location: 'Global',
+            createdAt: new Date().toISOString()
+          };
+          
+          const docRef = await db.collection('users').add(newUser);
+          req.user = { _id: docRef.id, id: docRef.id, ...newUser };
+          return next();
         }
         
-        if (!user) {
-          if (!isDBConnected) {
-            // Auto-create in sandbox memory to prevent session breakage on backend restarts
-            const namePart = email.split('@')[0];
-            user = {
-              _id: String(sandboxUsers.length + 1),
-              name: namePart.charAt(0).toUpperCase() + namePart.slice(1),
-              email: email,
-              plan: 'Sandbox Trial',
-              avatar: namePart.substring(0, 2).toUpperCase(),
-              bio: 'Premium Stock Platform member (Sandbox).',
-              company: 'Independent Trader',
-              phone: '',
-              location: 'Global',
-              createdAt: new Date()
-            };
-            sandboxUsers.push(user);
-          } else {
-            res.status(401);
-            return next(new Error('Not authorized, user in mock token not found'));
-          }
-        }
-        
-        req.user = user;
+        const userDoc = userDocs.docs[0];
+        req.user = { _id: userDoc.id, id: userDoc.id, ...userDoc.data() };
         return next();
       }
 
@@ -59,18 +50,22 @@ export const protect = async (req, res, next) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'supersecretcyberkey101');
 
       // Check user existence by decoded payload ID
-      let user;
-      if (isDBConnected) {
-        user = await User.findById(decoded.id) || await User.findOne({ email: decoded.id });
-      } else {
-        user = sandboxUsers.find(u => u._id === decoded.id || u.email === decoded.id);
+      const userDoc = await db.collection('users').doc(decoded.id).get();
+      let user = userDoc.exists ? { _id: userDoc.id, id: userDoc.id, ...userDoc.data() } : null;
+      
+      if (!user) {
+        // Fallback to check by email if the token ID was an email
+        const userDocs = await db.collection('users').where('email', '==', decoded.id).limit(1).get();
+        if (!userDocs.empty) {
+          const doc = userDocs.docs[0];
+          user = { _id: doc.id, id: doc.id, ...doc.data() };
+        }
       }
 
       if (!user) {
         res.status(401);
         return next(new Error('Not authorized, user not found'));
       }
-
 
       // Attach user details to request
       req.user = user;

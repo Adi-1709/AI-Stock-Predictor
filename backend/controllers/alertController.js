@@ -1,189 +1,162 @@
-import Alert from '../models/Alert.js';
-import Notification from '../models/Notification.js';
-import { isDBConnected } from '../config/db.js';
+import { db } from '../config/firebase.js';
 
-// In-memory fallback arrays for sandbox operations
-export const sandboxAlerts = [
-  { _id: 'a1', user: '1', symbol: 'AAPL', type: 'price_above', value: '190.00', isTriggered: false },
-  { _id: 'a2', user: '1', symbol: 'RELIANCE.NS', type: 'rsi_above', value: '70', isTriggered: false }
-];
-
-export const sandboxNotifications = [
-  { _id: 'n1', user: '1', title: 'ML Signal Alert', message: 'NVDA triggered BUY signal with 94% confidence.', type: 'success', isRead: false, createdAt: new Date() },
-  { _id: 'n2', user: '1', title: 'Price Threshold Crossed', message: 'AAPL price crossed above $180.00.', type: 'info', isRead: true, createdAt: new Date(Date.now() - 3600000) }
-];
-
-/**
- * @desc    Get user alerts
- * @route   GET /api/alerts
- * @access  Private
- */
 export const getAlerts = async (req, res, next) => {
-  const userId = req.user._id || req.user.id || '1';
   try {
-    if (isDBConnected) {
-      const alerts = await Alert.find({ user: userId });
-      return res.json(alerts);
-    }
-    const alerts = sandboxAlerts.filter(a => a.user.toString() === userId.toString());
-    res.json(alerts);
+    const snapshot = await db.collection('alerts')
+      .where('userId', '==', req.user.id)
+      .get();
+      
+    const items = [];
+    snapshot.forEach(doc => {
+      items.push({ _id: doc.id, ...doc.data() });
+    });
+    
+    res.json(items);
   } catch (error) {
     res.status(500);
     next(error);
   }
 };
 
-/**
- * @desc    Create new smart alert
- * @route   POST /api/alerts
- * @access  Private
- */
 export const createAlert = async (req, res, next) => {
-  const userId = req.user._id || req.user.id || '1';
   const { symbol, type, value } = req.body;
 
   if (!symbol || !type || !value) {
-    return res.status(400).json({ error: 'Stock symbol, parameter type, and comparison value are required.' });
+    res.status(400);
+    return next(new Error('Please provide symbol, type, and value'));
   }
 
-  const upperSymbol = symbol.toUpperCase();
-
   try {
-    let newAlert;
-    if (isDBConnected) {
-      newAlert = await Alert.create({
-        user: userId,
-        symbol: upperSymbol,
-        type,
-        value: value.toString(),
-        isTriggered: false
-      });
-    } else {
-      newAlert = {
-        _id: `a-${Date.now()}`,
-        user: userId,
-        symbol: upperSymbol,
-        type,
-        value: value.toString(),
-        isTriggered: false
-      };
-      sandboxAlerts.push(newAlert);
-    }
-    res.json(newAlert);
+    const newItem = {
+      userId: req.user.id,
+      symbol: symbol.toUpperCase(),
+      type,
+      value: String(value),
+      isTriggered: false,
+      createdAt: new Date().toISOString()
+    };
+    
+    const docRef = await db.collection('alerts').add(newItem);
+
+    // Log activity
+    await db.collection('activityLogs').add({
+      userId: req.user.id,
+      action: 'ALERT_CREATE',
+      details: `Created alert for ${newItem.symbol}: ${type} ${value}`,
+      createdAt: new Date().toISOString()
+    });
+
+    res.status(201).json({ _id: docRef.id, ...newItem });
   } catch (error) {
     res.status(500);
     next(error);
   }
 };
 
-/**
- * @desc    Delete custom alert
- * @route   DELETE /api/alerts/:id
- * @access  Private
- */
 export const deleteAlert = async (req, res, next) => {
-  const { id } = req.params;
   try {
-    if (isDBConnected) {
-      await Alert.deleteOne({ _id: id });
-    } else {
-      const idx = sandboxAlerts.findIndex(a => a._id === id);
-      if (idx !== -1) sandboxAlerts.splice(idx, 1);
+    const docRef = db.collection('alerts').doc(req.params.id);
+    const doc = await docRef.get();
+    
+    if (!doc.exists) {
+      res.status(404);
+      return next(new Error('Alert not found'));
     }
-    res.json({ message: 'Alert successfully removed.' });
+    
+    if (doc.data().userId !== req.user.id) {
+      res.status(401);
+      return next(new Error('Not authorized to delete this alert'));
+    }
+
+    await docRef.delete();
+
+    // Log activity
+    await db.collection('activityLogs').add({
+      userId: req.user.id,
+      action: 'ALERT_DELETE',
+      details: `Deleted alert`,
+      createdAt: new Date().toISOString()
+    });
+
+    res.json({ message: 'Alert removed' });
   } catch (error) {
     res.status(500);
     next(error);
   }
 };
 
-/**
- * @desc    Get user notifications
- * @route   GET /api/alerts/notifications
- * @access  Private
- */
 export const getNotifications = async (req, res, next) => {
-  const userId = req.user._id || req.user.id || '1';
   try {
-    if (isDBConnected) {
-      const notifications = await Notification.find({ user: userId }).sort({ createdAt: -1 });
-      return res.json(notifications);
-    }
-    const notifications = [...sandboxNotifications]
-      .filter(n => n.user.toString() === userId.toString())
-      .sort((a, b) => b.createdAt - a.createdAt);
-    res.json(notifications);
+    const snapshot = await db.collection('notifications')
+      .where('userId', '==', req.user.id)
+      .orderBy('createdAt', 'desc')
+      .get();
+      
+    const items = [];
+    snapshot.forEach(doc => {
+      items.push({ _id: doc.id, ...doc.data() });
+    });
+    
+    res.json(items);
   } catch (error) {
     res.status(500);
     next(error);
   }
 };
 
-/**
- * @desc    Mark notification as read
- * @route   PUT /api/alerts/notifications/:id
- * @access  Private
- */
 export const markNotificationRead = async (req, res, next) => {
-  const { id } = req.params;
   try {
-    if (isDBConnected) {
-      await Notification.updateOne({ _id: id }, { isRead: true });
-    } else {
-      const item = sandboxNotifications.find(n => n._id === id);
-      if (item) item.isRead = true;
+    const docRef = db.collection('notifications').doc(req.params.id);
+    const doc = await docRef.get();
+    
+    if (!doc.exists) {
+      res.status(404);
+      return next(new Error('Notification not found'));
     }
-    res.json({ message: 'Notification marked as read.' });
+
+    if (doc.data().userId !== req.user.id) {
+      res.status(401);
+      return next(new Error('Not authorized'));
+    }
+
+    await docRef.update({ isRead: true });
+    
+    const updated = await docRef.get();
+    res.json({ _id: updated.id, ...updated.data() });
   } catch (error) {
     res.status(500);
     next(error);
   }
 };
 
-/**
- * @desc    Clear all user notifications
- * @route   DELETE /api/alerts/notifications
- * @access  Private
- */
 export const clearNotifications = async (req, res, next) => {
-  const userId = req.user._id || req.user.id || '1';
   try {
-    if (isDBConnected) {
-      await Notification.deleteMany({ user: userId });
-    } else {
-      // Splice all matching items
-      for (let i = sandboxNotifications.length - 1; i >= 0; i--) {
-        if (sandboxNotifications[i].user.toString() === userId.toString()) {
-          sandboxNotifications.splice(i, 1);
-        }
-      }
-    }
-    res.json({ message: 'All notifications cleared.' });
+    const snapshot = await db.collection('notifications')
+      .where('userId', '==', req.user.id)
+      .get();
+
+    const batch = db.batch();
+    snapshot.docs.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+    await batch.commit();
+
+    res.json({ message: 'All notifications cleared' });
   } catch (error) {
     res.status(500);
     next(error);
   }
 };
 
-/**
- * Helper utility to insert triggered alerts from client updates securely
- */
-export const insertTriggeredNotification = async (userId, title, message, type) => {
-  try {
-    if (isDBConnected) {
-      await Notification.create({ user: userId, title, message, type, isRead: false });
-    } else {
-      sandboxNotifications.push({
-        _id: `n-${Date.now()}`,
-        user: userId,
-        title,
-        message,
-        type,
-        isRead: false,
-        createdAt: new Date()
-      });
-    }
-  } catch (err) {
-    console.error("Failed to save triggered notification:", err);
-  }
+// Expose internal function to allow system to trigger notifications directly
+export const insertTriggeredNotification = async (userId, title, message, type = 'info') => {
+  const newItem = {
+    userId,
+    title,
+    message,
+    type,
+    isRead: false,
+    createdAt: new Date().toISOString()
+  };
+  await db.collection('notifications').add(newItem);
 };

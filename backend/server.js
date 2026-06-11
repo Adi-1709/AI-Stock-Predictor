@@ -1,187 +1,116 @@
 import express from 'express';
-import cors from 'cors';
 import dotenv from 'dotenv';
+import cors from 'cors';
+import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 
-// Database
-import { connectDB, isDBConnected } from './config/db.js';
+// Initialize Firebase Admin (this must be imported early)
+import './config/firebase.js';
 
-// Routes
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import watchlistRoutes from './routes/watchlistRoutes.js';
-import predictRoutes from './routes/predictRoutes.js';
 import historyRoutes from './routes/historyRoutes.js';
+import predictRoutes from './routes/predictRoutes.js';
 import portfolioRoutes from './routes/portfolioRoutes.js';
 import alertRoutes from './routes/alertRoutes.js';
 import marketRoutes from './routes/marketRoutes.js';
 
-// Middleware
-import {
-  notFound,
-  errorHandler
-} from './middleware/errorMiddleware.js';
-
-// Load environment variables
 dotenv.config();
-
-// Connect database
-connectDB();
 
 const app = express();
 
-// =========================
-// MIDDLEWARE
-// =========================
-
-// Dynamic CORS whitelist
+// Set up detailed CORS to handle Vercel deployment and local dev
 const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim().toLowerCase())
-  : [];
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : ['http://localhost:5173'];
 
-app.use(cors({
+const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl, postman, server-to-server)
-    if (!origin) return callback(null, true);
-    
-    const normalizedOrigin = origin.toLowerCase();
-    
-    // Check if ALLOWED_ORIGINS is empty/undefined or contains * (allowing all for setup/guest access)
-    if (!process.env.ALLOWED_ORIGINS || allowedOrigins.length === 0 || allowedOrigins.includes('*')) {
-      return callback(null, true);
+    if (!origin || allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
     }
-    
-    if (
-      allowedOrigins.includes(normalizedOrigin) ||
-      normalizedOrigin.startsWith('http://localhost:') ||
-      normalizedOrigin.startsWith('http://127.0.0.1:') ||
-      normalizedOrigin.endsWith('.vercel.app')
-    ) {
-      return callback(null, true);
-    }
-    
-    console.warn(`[CORS] Origin ${origin} not in whitelist. Blocked.`);
-    return callback(new Error('Not allowed by CORS'));
   },
-  credentials: true
-}));
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
 
 // Native Rate Limiter to protect endpoints
 const ipRequestCounts = new Map();
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 mins window
 const RATE_LIMIT_MAX_REQUESTS = 250; // max 250 requests per IP per window
 
-const rateLimiter = (req, res, next) => {
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+app.use((req, res, next) => {
+  const ip = req.ip || req.connection.remoteAddress;
   const currentTime = Date.now();
-  
-  if (!ipRequestCounts.has(ip)) {
-    ipRequestCounts.set(ip, { count: 1, windowStart: currentTime });
-    return next();
-  }
-  
-  const clientData = ipRequestCounts.get(ip);
-  if (currentTime - clientData.windowStart > RATE_LIMIT_WINDOW_MS) {
-    clientData.count = 1;
-    clientData.windowStart = currentTime;
-    ipRequestCounts.set(ip, clientData);
-    return next();
-  }
-  
-  clientData.count += 1;
-  ipRequestCounts.set(ip, clientData);
-  
-  if (clientData.count > RATE_LIMIT_MAX_REQUESTS) {
-    return res.status(429).json({
-      error: 'Too many requests from this IP. Please try again after 15 minutes.'
-    });
-  }
-  
-  next();
-};
 
-app.use('/api', rateLimiter);
+  if (!ipRequestCounts.has(ip)) {
+    ipRequestCounts.set(ip, { count: 1, resetTime: currentTime + RATE_LIMIT_WINDOW_MS });
+    return next();
+  }
+
+  const record = ipRequestCounts.get(ip);
+  if (currentTime > record.resetTime) {
+    ipRequestCounts.set(ip, { count: 1, resetTime: currentTime + RATE_LIMIT_WINDOW_MS });
+    return next();
+  }
+
+  record.count += 1;
+  if (record.count > RATE_LIMIT_MAX_REQUESTS) {
+    return res.status(429).json({ message: 'Too many requests, please try again later.' });
+  }
+
+  next();
+});
+
+// Clean up expired rate limit records periodically
+setInterval(() => {
+  const currentTime = Date.now();
+  for (const [ip, record] of ipRequestCounts.entries()) {
+    if (currentTime > record.resetTime) {
+      ipRequestCounts.delete(ip);
+    }
+  }
+}, RATE_LIMIT_WINDOW_MS);
 
 app.use(express.json());
-app.use(express.urlencoded({
-  extended: true
-}));
 
-// =========================
-// ROOT ROUTE
-// =========================
-app.get('/', (req, res) => {
-  res.json({
-    status: 'online',
-    message:
-      'AI Stock Predictor API Server is running.',
-    timestamp:
-      new Date().toISOString()
-  });
-});
-
-// =========================
-// DATABASE STATUS
-// =========================
-app.get('/api/status', (req, res) => {
-  res.json({
-    dbConnected:
-      isDBConnected
-  });
-});
-
-// =========================
-// API ROUTES
-// =========================
+// Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/watchlist', watchlistRoutes);
+app.use('/api/history', historyRoutes);
+app.use('/api/predict', predictRoutes);
+app.use('/api/portfolio', portfolioRoutes);
+app.use('/api/alerts', alertRoutes);
+app.use('/api/market', marketRoutes);
 
-app.use('/api/user', userRoutes);
+// Root Health Route
+app.get('/', (req, res) => {
+  res.send('AI Stock Predictor Firebase API is running');
+});
+app.get("/", (req, res) => {
+  res.json({
+    message: "Backend Working Successfully"
+  });
+});
 
-app.use(
-  '/api/watchlist',
-  watchlistRoutes
-);
+app.get("/api/status", (req, res) => {
+  res.json({
+    status: "Backend Running Successfully"
+  });
+});
 
-app.use(
-  '/api/predict',
-  predictRoutes
-);
 
-app.use(
-  '/api/history',
-  historyRoutes
-);
-
-app.use(
-  '/api/portfolio',
-  portfolioRoutes
-);
-
-app.use(
-  '/api/alerts',
-  alertRoutes
-);
-
-app.use(
-  '/api/market',
-  marketRoutes
-);
-
-// =========================
-// ERROR HANDLING
-// =========================
+// Error Handling Middleware
 app.use(notFound);
 app.use(errorHandler);
 
-// =========================
-// SERVER START
-// =========================
-const PORT =
-  process.env.PORT || 5000;
+const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(
-    `🚀 [Server] Running in ${process.env.NODE_ENV ||
-    'development'
-    } mode on port ${PORT}`
-  );
+  console.log(`🚀 Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
 });

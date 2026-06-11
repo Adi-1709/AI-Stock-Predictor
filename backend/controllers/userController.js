@@ -1,34 +1,27 @@
-import User from '../models/User.js';
-import ActivityLog from '../models/ActivityLog.js';
-import { isDBConnected } from '../config/db.js';
-import { sandboxUsers, sandboxActivityLogs } from '../config/sandboxData.js';
+import { db } from '../config/firebase.js';
 
 /**
- * @desc    Get user profile details
- * @route   GET /api/user/profile
+ * @desc    Get user profile
+ * @route   GET /api/users/profile
  * @access  Private
  */
 export const getUserProfile = async (req, res, next) => {
   try {
-    let user;
-    if (isDBConnected) {
-      user = await User.findById(req.user.id);
-    } else {
-      user = sandboxUsers.find(u => u._id === String(req.user._id || req.user.id));
-    }
+    const userDoc = await db.collection('users').doc(req.user.id).get();
 
-    if (user) {
+    if (userDoc.exists) {
+      const userData = userDoc.data();
       res.json({
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        plan: user.plan,
-        avatar: user.avatar,
-        bio: user.bio,
-        company: user.company,
-        phone: user.phone,
-        location: user.location,
-        createdAt: user.createdAt
+        id: userDoc.id,
+        name: userData.name,
+        email: userData.email,
+        plan: userData.plan,
+        avatar: userData.avatar,
+        bio: userData.bio,
+        company: userData.company,
+        phone: userData.phone,
+        location: userData.location,
+        createdAt: userData.createdAt,
       });
     } else {
       res.status(404);
@@ -41,95 +34,88 @@ export const getUserProfile = async (req, res, next) => {
 };
 
 /**
- * @desc    Update user profile configurations
- * @route   PUT /api/user/profile
+ * @desc    Update user profile
+ * @route   PUT /api/users/profile
  * @access  Private
  */
 export const updateUserProfileController = async (req, res, next) => {
   try {
-    let user;
-    if (isDBConnected) {
-      user = await User.findById(req.user.id);
-    } else {
-      user = sandboxUsers.find(u => u._id === String(req.user._id || req.user.id));
-    }
+    const userRef = db.collection('users').doc(req.user.id);
+    const userDoc = await userRef.get();
 
-    if (!user) {
+    if (userDoc.exists) {
+      const updates = {};
+
+      if (req.body.name) updates.name = req.body.name;
+      if (req.body.bio !== undefined) updates.bio = req.body.bio;
+      if (req.body.company !== undefined) updates.company = req.body.company;
+      if (req.body.phone !== undefined) updates.phone = req.body.phone;
+      if (req.body.location !== undefined) updates.location = req.body.location;
+      if (req.body.avatar) updates.avatar = req.body.avatar;
+      if (req.body.plan) updates.plan = req.body.plan;
+
+      await userRef.update(updates);
+
+      const updatedUserDoc = await userRef.get();
+      const updatedUserData = updatedUserDoc.data();
+
+      // Log the profile update
+      const logDetails = {
+        userId: req.user.id,
+        action: 'PROFILE_UPDATE',
+        details: 'User updated their profile information',
+        ipAddress: req.ip || '127.0.0.1',
+        userAgent: req.headers['user-agent'] || '',
+        createdAt: new Date().toISOString()
+      };
+      await db.collection('activityLogs').add(logDetails);
+
+      res.json({
+        id: updatedUserDoc.id,
+        name: updatedUserData.name,
+        email: updatedUserData.email,
+        plan: updatedUserData.plan,
+        avatar: updatedUserData.avatar,
+        bio: updatedUserData.bio,
+        company: updatedUserData.company,
+        phone: updatedUserData.phone,
+        location: updatedUserData.location,
+      });
+    } else {
       res.status(404);
       return next(new Error('User not found'));
     }
-
-    // Assign fields
-    if (req.body.name) user.name = req.body.name;
-    if (req.body.bio !== undefined) user.bio = req.body.bio;
-    if (req.body.company !== undefined) user.company = req.body.company;
-    if (req.body.phone !== undefined) user.phone = req.body.phone;
-    if (req.body.location !== undefined) user.location = req.body.location;
-    if (req.body.avatar) user.avatar = req.body.avatar;
-    if (req.body.plan) user.plan = req.body.plan;
-
-    let updatedUser;
-    if (isDBConnected) {
-      updatedUser = await user.save();
-    } else {
-      updatedUser = user;
-    }
-
-    // Log the profile update
-    const logDetails = {
-      user: user._id,
-      action: 'UPDATE_PROFILE',
-      details: `User updated profile settings: Name: ${user.name}`,
-      ipAddress: req.ip || '127.0.0.1',
-      userAgent: req.headers['user-agent'] || '',
-      createdAt: new Date()
-    };
-
-    if (isDBConnected) {
-      await ActivityLog.create(logDetails);
-    } else {
-      sandboxActivityLogs.unshift(logDetails);
-    }
-
-    res.json({
-      id: updatedUser._id,
-      name: updatedUser.name,
-      email: updatedUser.email,
-      plan: updatedUser.plan,
-      avatar: updatedUser.avatar,
-      bio: updatedUser.bio,
-      company: updatedUser.company,
-      phone: updatedUser.phone,
-      location: updatedUser.location
-    });
   } catch (error) {
-    res.status(400);
+    res.status(500);
     next(error);
   }
 };
 
 /**
  * @desc    Get user activity logs
- * @route   GET /api/user/activity-logs
+ * @route   GET /api/users/activity-logs
  * @access  Private
  */
 export const getUserActivities = async (req, res, next) => {
   try {
-    let logs;
-    const userIdStr = String(req.user._id || req.user.id);
-    if (isDBConnected) {
-      logs = await ActivityLog.find({ user: req.user._id }).sort({ createdAt: -1 }).limit(10);
-    } else {
-      logs = sandboxActivityLogs
-        .filter(log => String(log.user) === userIdStr)
-        .slice(0, 10);
-    }
+    const logsSnapshot = await db.collection('activityLogs')
+      .where('userId', '==', req.user.id)
+      .orderBy('createdAt', 'desc')
+      .limit(50)
+      .get();
+
+    const logs = [];
+    logsSnapshot.forEach((doc) => {
+      logs.push({ _id: doc.id, ...doc.data() });
+    });
+
     res.json(logs);
   } catch (error) {
     res.status(500);
     next(error);
   }
-};
+}
+
 
 
 

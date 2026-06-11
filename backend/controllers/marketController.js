@@ -1,16 +1,21 @@
-import Prediction from '../models/Prediction.js';
-import { isDBConnected } from '../config/db.js';
-import { sandboxPredictions } from '../config/sandboxData.js';
-
-// Seed initial indices baseline data
-const initialIndices = [
-  { symbol: '^NSEI', name: 'NIFTY 50', value: 22350.90, change: 142.50, changePercent: 0.64, direction: 'bullish', type: 'India' },
-  { symbol: '^BSESN', name: 'SENSEX', value: 73650.35, change: 480.20, changePercent: 0.66, direction: 'bullish', type: 'India' },
-  { symbol: '^NSEBANK', name: 'BANK NIFTY', value: 47850.60, change: -120.40, changePercent: -0.25, direction: 'bearish', type: 'India' },
-  { symbol: '^IXIC', name: 'NASDAQ', value: 16270.80, change: 245.50, changePercent: 1.53, direction: 'bullish', type: 'USA' },
-  { symbol: '^GSPC', name: 'S&P 500', value: 5120.30, change: 42.10, changePercent: 0.83, direction: 'bullish', type: 'USA' },
-  { symbol: '^DJI', name: 'DOW JONES', value: 38990.20, change: -85.60, changePercent: -0.22, direction: 'bearish', type: 'USA' }
+// Mock market data since this is primarily for demonstration purposes
+const mockIndices = [
+  { symbol: 'SPY', name: 'S&P 500', value: 5120.30, change: 45.20, changePercent: 0.89, direction: 'up' },
+  { symbol: 'QQQ', name: 'Nasdaq 100', value: 4380.15, change: 52.80, changePercent: 1.22, direction: 'up' },
+  { symbol: 'DIA', name: 'Dow Jones', value: 38950.40, change: -120.30, changePercent: -0.31, direction: 'down' },
+  { symbol: 'IWM', name: 'Russell 2000', value: 2050.80, change: 15.40, changePercent: 0.76, direction: 'up' }
 ];
+
+const mockMovers = {
+  gainers: [
+    { symbol: 'NVDA', name: 'NVIDIA Corp', price: 884.80, changePercent: 4.5 },
+    { symbol: 'AMD', name: 'Advanced Micro', price: 178.20, changePercent: 3.8 }
+  ],
+  losers: [
+    { symbol: 'TSLA', name: 'Tesla Inc', price: 175.34, changePercent: -2.4 },
+    { symbol: 'BA', name: 'Boeing Co', price: 185.20, changePercent: -1.8 }
+  ]
+};
 
 /**
  * @desc    Get live indices baseline
