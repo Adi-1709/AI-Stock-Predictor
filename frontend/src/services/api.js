@@ -1,8 +1,12 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'https://ai-stock-backend-25oq.onrender.com/api',
-  timeout: 10000,
+  baseURL:
+    import.meta.env.VITE_API_URL ||
+    'https://ai-stock-backend-25oq.onrender.com/api',
+
+  timeout: 15000,
+
   headers: {
     'Content-Type': 'application/json',
   }
@@ -14,9 +18,14 @@ api.interceptors.request.use(
     const user = localStorage.getItem('user');
 
     if (user) {
-      const parsedUser = JSON.parse(user);
-      config.headers.Authorization =
-        `Bearer mock-jwt-token-for-${parsedUser.email}`;
+      try {
+        const parsedUser = JSON.parse(user);
+
+        config.headers.Authorization =
+          `Bearer mock - jwt - token -for-${ parsedUser.email }`;
+      } catch (error) {
+        console.error('User parse error:', error);
+      }
     }
 
     return config;
