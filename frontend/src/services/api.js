@@ -1,35 +1,41 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://import.meta.env.VITE_API_URL/api',
+  baseURL: import.meta.env.VITE_API_URL || 'https://ai-stock-backend-25oq.onrender.com/api',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   }
 });
 
-// Request interceptor to attach auth headers
+// Request interceptor
 api.interceptors.request.use(
   (config) => {
     const user = localStorage.getItem('user');
+
     if (user) {
       const parsedUser = JSON.parse(user);
-      // In a real app we'd attach token, using mock details for now
-      config.headers.Authorization = `Bearer mock-jwt-token-for-${parsedUser.email}`;
+      config.headers.Authorization =
+        `Bearer mock-jwt-token-for-${parsedUser.email}`;
     }
+
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Response interceptor to handle 401 errors (e.g., clear localStorage and redirect)
+// Response interceptor
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
-      const publicPaths = ['/login', '/register', '/forgot-password', '/'];
+    if (error.response?.status === 401) {
+      const publicPaths = [
+        '/login',
+        '/register',
+        '/forgot-password',
+        '/'
+      ];
+
       const currentPath = window.location.pathname;
 
       localStorage.removeItem('user');
@@ -38,6 +44,7 @@ api.interceptors.response.use(
         window.location.href = '/login';
       }
     }
+
     return Promise.reject(error);
   }
 );
