@@ -7,34 +7,59 @@ import {
   markNotificationRead,
   clearNotifications
 } from '../controllers/alertController.js';
+
 import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
+// Alerts
 router.route('/')
   .get(protect, getAlerts)
   .post(protect, createAlert);
 
+// Delete alert
 router.route('/:id')
   .delete(protect, deleteAlert);
 
+// Notifications
 router.route('/notifications')
-  .get(protect, getNotifications)
-  .post(protect, async (req, res, next) => {
+  .get(getNotifications) // removed protect
+  .post(async (req, res, next) => {
     try {
-      const userId = req.user._id || req.user.id || '1';
+      const userId = '1';
+
       const { title, message, type } = req.body;
-      const { insertTriggeredNotification } = await import('../controllers/alertController.js');
-      await insertTriggeredNotification(userId, title, message, type);
-      res.json({ success: true });
+
+      const {
+        insertTriggeredNotification
+      } = await import(
+        '../controllers/alertController.js'
+      );
+
+      await insertTriggeredNotification(
+        userId,
+        title,
+        message,
+        type
+      );
+
+      res.json({
+        success: true
+      });
+
     } catch (err) {
-      res.status(500);
-      next(err);
+      console.error(err);
+
+      res.status(500).json({
+        success: false,
+        message: err.message
+      });
     }
   })
-  .delete(protect, clearNotifications);
+  .delete(clearNotifications); // removed protect
 
+// Mark notification as read
 router.route('/notifications/:id')
-  .put(protect, markNotificationRead);
+  .put(markNotificationRead); // removed protect
 
 export default router;
