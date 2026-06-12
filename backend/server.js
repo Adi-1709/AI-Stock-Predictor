@@ -3,9 +3,10 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 
-// Initialize Firebase Admin (this must be imported early)
+// Firebase
 import './config/firebase.js';
 
+// Routes
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import watchlistRoutes from './routes/watchlistRoutes.js';
@@ -19,66 +20,122 @@ dotenv.config();
 
 const app = express();
 
-// Set up detailed CORS to handle Vercel deployment and local dev
+app.use(express.json());
+
+/* ===========================
+   CORS CONFIG
+=========================== */
+
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
-  : ['http://localhost:5173'];
+  : [
+    'http://localhost:5173',
+    'https://ai-stock-predictor-zeta.vercel.app'
+  ];
 
 const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
+    if (
+      !origin ||
+      allowedOrigins.includes(origin) ||
+      allowedOrigins.includes('*')
+    ) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      callback(null, true);
     }
   },
-  credentials: true,
-  optionsSuccessStatus: 200
+  credentials: true
 };
 
 app.use(cors(corsOptions));
 
-// Native Rate Limiter to protect endpoints
+/* ===========================
+   RATE LIMIT FIX
+=========================== */
+
+// Increased request limit
 const ipRequestCounts = new Map();
-const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 mins window
-const RATE_LIMIT_MAX_REQUESTS = 250; // max 250 requests per IP per window
+
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 mins
+
+// Increased from 250 → 10000
+const RATE_LIMIT_MAX_REQUESTS = 10000;
 
 app.use((req, res, next) => {
-  const ip = req.ip || req.connection.remoteAddress;
+  const ip =
+    req.headers['x-forwarded-for'] ||
+    req.socket.remoteAddress ||
+    req.ip;
+
   const currentTime = Date.now();
 
   if (!ipRequestCounts.has(ip)) {
-    ipRequestCounts.set(ip, { count: 1, resetTime: currentTime + RATE_LIMIT_WINDOW_MS });
+    ipRequestCounts.set(ip, {
+      count: 1,
+      resetTime:
+        currentTime +
+        RATE_LIMIT_WINDOW_MS
+    });
+
     return next();
   }
 
-  const record = ipRequestCounts.get(ip);
-  if (currentTime > record.resetTime) {
-    ipRequestCounts.set(ip, { count: 1, resetTime: currentTime + RATE_LIMIT_WINDOW_MS });
+  const record =
+    ipRequestCounts.get(ip);
+
+  if (
+    currentTime >
+    record.resetTime
+  ) {
+    ipRequestCounts.set(ip, {
+      count: 1,
+      resetTime:
+        currentTime +
+        RATE_LIMIT_WINDOW_MS
+    });
+
     return next();
   }
 
   record.count += 1;
-  if (record.count > RATE_LIMIT_MAX_REQUESTS) {
-    return res.status(429).json({ message: 'Too many requests, please try again later.' });
+
+  if (
+    record.count >
+    RATE_LIMIT_MAX_REQUESTS
+  ) {
+    return res.status(429).json({
+      success: false,
+      message:
+        'Too many requests. Please try again later.'
+    });
   }
 
   next();
 });
 
-// Clean up expired rate limit records periodically
+// Cleanup memory
 setInterval(() => {
-  const currentTime = Date.now();
-  for (const [ip, record] of ipRequestCounts.entries()) {
-    if (currentTime > record.resetTime) {
+  const currentTime =
+    Date.now();
+
+  for (const [
+    ip,
+    record
+  ] of ipRequestCounts.entries()) {
+    if (
+      currentTime >
+      record.resetTime
+    ) {
       ipRequestCounts.delete(ip);
     }
   }
 }, RATE_LIMIT_WINDOW_MS);
 
-app.use(express.json());
+/* ===========================
+   ROUTES
+=========================== */
 
-// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/watchlist', watchlistRoutes);
@@ -88,29 +145,47 @@ app.use('/api/portfolio', portfolioRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/market', marketRoutes);
 
-// Root Health Route
+/* ===========================
+   HEALTH CHECK ROUTES
+=========================== */
+
 app.get('/', (req, res) => {
-  res.send('AI Stock Predictor Firebase API is running');
-});
-app.get("/", (req, res) => {
   res.json({
-    message: "Backend Working Successfully"
+    success: true,
+    message:
+      'AI Stock Predictor Backend Running 🚀'
   });
 });
 
-app.get("/api/status", (req, res) => {
-  res.json({
-    status: "Backend Running Successfully"
-  });
-});
+app.get(
+  '/api/status',
+  (req, res) => {
+    res.json({
+      success: true,
+      status:
+        'Backend Running Successfully'
+    });
+  }
+);
 
+/* ===========================
+   ERROR HANDLER
+=========================== */
 
-// Error Handling Middleware
 app.use(notFound);
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+/* ===========================
+   SERVER
+=========================== */
+
+const PORT =
+  process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+  console.log(
+    `🚀 Server running in ${process.env.NODE_ENV ||
+    'development'
+    } mode on port ${PORT}`
+  );
 });
