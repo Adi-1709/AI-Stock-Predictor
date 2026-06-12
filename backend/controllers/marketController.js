@@ -24,7 +24,7 @@ const mockMovers = {
  */
 export const getIndices = async (req, res, next) => {
   try {
-    res.json(initialIndices);
+    res.json(mockIndices);
   } catch (error) {
     res.status(500);
     next(error);

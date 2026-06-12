@@ -110,47 +110,35 @@ export const deleteAlert = async (
 };
 
 // Notifications
-export const getNotifications = async (
-  req,
-  res
-) => {
+export const getNotifications = async (req, res) => {
   try {
     const notifications = [
       {
         id: 1,
-        title: 'Market Update',
-        message:
-          'NASDAQ opened with positive momentum',
-        type: 'market',
-        read: false,
-        createdAt: new Date()
+        title: "Market Update",
+        message: "NASDAQ opened with positive momentum",
+        type: "market",
+        createdAt: new Date().toISOString()
       },
       {
         id: 2,
-        title: 'Stock Alert',
-        message: 'AAPL moved more than 2%',
-        type: 'stock',
-        read: false,
-        createdAt: new Date()
+        title: "Stock Alert",
+        message: "AAPL price changed significantly",
+        type: "stock",
+        createdAt: new Date().toISOString()
       }
     ];
 
-    return res.status(200).json({
-      success: true,
-      notifications
-    });
+    // RETURN ARRAY DIRECTLY
+    return res.status(200).json(notifications);
 
   } catch (error) {
     console.error(
-      'Notification fetch error:',
+      "Notification fetch error:",
       error
     );
 
-    return res.status(500).json({
-      success: false,
-      message:
-        'Failed to fetch notifications'
-    });
+    return res.status(500).json([]);
   }
 };
 

@@ -87,7 +87,7 @@ export const getStockHistory = async (req, res, next) => {
       });
     }
 
-    res.json(data);
+    res.json({ history: data, meta: null });
   } catch (error) {
     res.status(500);
     next(error);
