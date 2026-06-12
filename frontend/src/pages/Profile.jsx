@@ -52,7 +52,7 @@ export default function Profile() {
     setIsLoadingLogs(true);
     try {
       const res = await api.get('/user/activity-logs');
-      const mapped = res.data.map(log => ({
+      const mapped = (res.data || []).map(log => ({
         id: log._id,
         action: `${log.action}: ${log.details}`,
         time: new Date(log.createdAt).toISOString().replace('T', ' ').substring(0, 19)

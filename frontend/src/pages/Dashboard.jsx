@@ -229,10 +229,8 @@ export default function Dashboard() {
       try {
         setChartLoading(true);
         const data = await fetchStockHistory(symbol, activeTimeframe);
-        if (data) {
-          setChartHistory(data.history || []);
-          setChartMeta(data.meta || null);
-        }
+        setChartHistory(Array.isArray(data) ? data : []);
+        setChartMeta(null);
       } catch (err) {
         console.error("Error loading stock history:", err);
       } finally {
@@ -386,14 +384,14 @@ export default function Dashboard() {
   // Selected Stock chart timeframe points
   const activeChartData = chartData[activeTimeframe] || chartData['1W'];
 
-  const activePrediction = predictionData ? {
-    prediction: predictionData.prediction,
-    confidence: predictionData.confidence,
-    direction: predictionData.direction?.toLowerCase() || 'neutral',
-    recommendation: predictionData.recommendation || (predictionData.prediction === 'BUY' ? 'Strong Buy' : predictionData.prediction === 'SELL' ? 'Strong Sell' : 'Hold'),
-    strength: predictionData.strength || (predictionData.confidence > 80 ? 'High' : predictionData.confidence > 60 ? 'Moderate' : 'Low'),
-    ticker: predictionData.symbol || symbol,
-    reasoning: predictionData.reasoning
+  const activePrediction = predictionData?.success && predictionData.stock ? {
+    prediction: predictionData.stock.prediction,
+    confidence: predictionData.stock.confidence,
+    direction: predictionData.stock.prediction === 'BUY' ? 'bullish' : predictionData.stock.prediction === 'SELL' ? 'bearish' : 'neutral',
+    recommendation: predictionData.stock.recommendation,
+    strength: predictionData.stock.confidence > 80 ? 'High' : predictionData.stock.confidence > 60 ? 'Moderate' : 'Low',
+    ticker: predictionData.stock.symbol || symbol,
+    reasoning: predictionData.metrics?.reasoning || "Based on technicals and sentiment"
   } : {
     prediction: aiPrediction.recommendation.toUpperCase().includes('BUY') ? 'BUY' : aiPrediction.recommendation.toUpperCase().includes('SELL') ? 'SELL' : 'HOLD',
     confidence: aiPrediction.confidence,
@@ -411,8 +409,8 @@ export default function Dashboard() {
     tag: activePrediction.prediction
   };
 
-  const activeTechnicals = predictionData?.technicals || technicals;
-  const activeSentiment = predictionData?.sentiment || sentiment;
+  const activeTechnicals = predictionData?.metrics || technicals;
+  const activeSentiment = predictionData?.metrics?.sentiment || sentiment;
 
   // Global Stat Cards Data
   const sentimentDir = activePrediction.prediction;
@@ -657,7 +655,7 @@ export default function Dashboard() {
         <div className="space-y-6">
           {/* Live Market Indices Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
-            {indices.map((idx, i) => {
+            {(indices || []).map((idx, i) => {
               const isUpIdx = idx.change >= 0;
               const accentColor = isUpIdx ? '#00ff66' : '#ff2d55';
               const pts = idx.sparkline || [idx.value];
@@ -968,7 +966,7 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-900/40">
-                    {alerts.map(alert => (
+                    {(alerts || []).map(alert => (
                       <tr key={alert._id} className="hover:bg-slate-900/25 transition-colors">
                         <td className="py-2.5 px-3 font-black text-slate-150">{alert.symbol}</td>
                         <td className="py-2.5 px-3 text-slate-400 capitalize">{alert.type.replace('_', ' ')}</td>
@@ -1021,7 +1019,7 @@ export default function Dashboard() {
                 </div>
 
                 <div className="space-y-2 overflow-y-auto max-h-56 pr-1 custom-scrollbar">
-                  {notifications.map(notif => (
+                  {(notifications || []).map(notif => (
                     <div 
                       key={notif._id}
                       onClick={() => markNotificationRead(notif._id)}
@@ -1618,7 +1616,7 @@ export default function Dashboard() {
                         </div>
                       ) : (
                         <div className="space-y-3 max-h-[260px] overflow-y-auto pr-1.5 scrollbar-none flex-1">
-                          {news.map((item, i) => {
+                          {(news || []).map((item, i) => {
                             const sent = item.sentiment ? item.sentiment.toLowerCase() : 'neutral';
                             const badgeClass = sent === 'positive' ? 'glow-badge-buy' : sent === 'negative' ? 'glow-badge-sell' : 'glow-badge-hold';
                             return (

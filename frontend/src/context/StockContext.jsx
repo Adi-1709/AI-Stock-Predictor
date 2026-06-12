@@ -826,7 +826,7 @@ export function StockProvider({ children }) {
     const loadMarketData = async () => {
       try {
         const indicesRes = await api.get('/market/indices');
-        setIndices(indicesRes.data.map(idx => ({
+        setIndices((indicesRes.data || []).map(idx => ({
           ...idx,
           sparkline: idx.type === 'India' 
             ? [idx.value - 100, idx.value - 50, idx.value - 70, idx.value + 20, idx.value - 20, idx.value]
@@ -1092,7 +1092,7 @@ export function StockProvider({ children }) {
       if (!isAuthenticated) return;
       try {
         const res = await api.get('/watchlist');
-        setWatchlist(res.data.map(item => item.symbol));
+        setWatchlist((res.data || []).map(item => item.symbol));
         
         // Dynamic price updates for suggestions based on watchlist items
         setStocks(prev => {

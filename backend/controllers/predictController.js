@@ -15,12 +15,14 @@ export const getStockPrediction = async (req, res, next) => {
   try {
     // Attempt real ML service request
     let flaskData = null;
-    const flaskUrl = process.env.FLASK_ML_URL || 'http://localhost:8000';
-    try {
-      const flaskRes = await axios.get(`${flaskUrl}/predict/${symbol}`, { timeout: 8000 });
-      flaskData = flaskRes.data;
-    } catch (flaskError) {
-      console.warn(`⚠️ [Flask ML] Failed to reach service: ${flaskError.message}. Using proxy fallback.`);
+    const flaskUrl = process.env.FLASK_ML_URL;
+    if (flaskUrl) {
+      try {
+        const flaskRes = await axios.get(`${flaskUrl}/predict/${symbol}`, { timeout: 8000 });
+        flaskData = flaskRes.data;
+      } catch (flaskError) {
+        console.warn(`⚠️ [Flask ML] Failed to reach service: ${flaskError.message}. Using proxy fallback.`);
+      }
     }
 
     const price = flaskData?.actual || parseFloat((150 + Math.random() * 50).toFixed(2));
@@ -46,20 +48,39 @@ export const getStockPrediction = async (req, res, next) => {
     const analytics = calculateEngineMetrics(mergedPrediction, symbol);
 
     const finalPayload = {
-      symbol,
-      ...mergedPrediction,
-      ...analytics,
-      date: new Date().toISOString()
+      success: true,
+      stock: {
+        symbol: symbol,
+        market: marketInfo?.market || "NASDAQ",
+        currency: marketInfo?.currency || "USD",
+        currentPrice: price,
+        targetPrice: predictionObj.targetPrice,
+        prediction: mergedPrediction.prediction,
+        confidence: mergedPrediction.confidence,
+        recommendation: predictionObj.recommendation || "Hold"
+      },
+      history: [],
+      news: [],
+      metrics: {
+        ...technicals,
+        ...analytics
+      }
     };
 
     // Save to Firestore history
-    await db.collection('predictions').add(finalPayload);
+    await db.collection('predictions').add({ ...finalPayload.stock, date: new Date().toISOString() });
     res.json(finalPayload);
 
   } catch (error) {
     console.error(`❌ [Prediction Engine] Fatal Error: ${error.message}`);
-    res.status(500);
-    next(new Error('AI Prediction generation failed. Please try again later.'));
+    res.status(500).json({
+      success: false,
+      message: "Prediction unavailable",
+      stock: { symbol, currentPrice: 0, prediction: "HOLD", recommendation: "Hold" },
+      history: [],
+      news: [],
+      metrics: {}
+    });
   }
 };
 
@@ -87,10 +108,9 @@ export const getStockHistory = async (req, res, next) => {
       });
     }
 
-    res.json({ history: data, meta: null });
+    res.json(data);
   } catch (error) {
-    res.status(500);
-    next(error);
+    res.status(500).json([]);
   }
 };
 
@@ -127,7 +147,6 @@ export const getStockNews = async (req, res, next) => {
     ];
     res.json(mockNews);
   } catch (error) {
-    res.status(500);
-    next(error);
+    res.status(500).json([]);
   }
 };

@@ -29,8 +29,7 @@ app.use(express.json());
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
   : [
-    'http://localhost:5173',
-    'https://ai-stock-predictor-zeta.vercel.app'
+    process.env.FRONTEND_URL || 'https://ai-stock-predictor-zeta.vercel.app'
   ];
 
 const corsOptions = {
