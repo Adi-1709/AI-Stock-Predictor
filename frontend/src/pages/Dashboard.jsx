@@ -1331,7 +1331,7 @@ export default function Dashboard() {
               obv: { icon: FiAward, label: 'OBV', interp: (v) => v > 70 ? 'Accumulation phase — institutional buying' : v < 40 ? 'Distribution — selling pressure dominates' : 'Neutral flow — no clear institutional bias' },
             };
 
-            const entries = Object.entries(activeTechnicals);
+            const entries = Object.entries(activeTechnicals).filter(([k, v]) => v && typeof v === 'object' && v.color);
             const bullishCount = entries.filter(([, ind]) => ind.color.includes('emerald')).length;
             const bearishCount = entries.filter(([, ind]) => ind.color.includes('rose')).length;
             const outlook = bullishCount > bearishCount + 1 ? 'Strong Bullish Momentum'
