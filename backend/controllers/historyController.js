@@ -1,4 +1,6 @@
 import { db } from '../config/firebase.js';
+import yahooFinance2 from 'yahoo-finance2';
+const yahooFinance = new yahooFinance2();
 
 /**
  * @desc    Get prediction history logs with pagination & filtering
@@ -21,14 +23,10 @@ export const getHistory = async (req, res, next) => {
 
     let query = db.collection('predictions');
 
-    // Filtering
     if (filterType !== 'all') {
       query = query.where('prediction', '==', filterType.toUpperCase());
     }
 
-    // Sorting
-    // Due to Firestore index constraints, we sort purely by createdAt or date primarily
-    // For full flexibility across all sort keys without compound indexes, we'll sort in-memory
     const snapshot = await query.get();
     
     let logs = [];
@@ -36,13 +34,11 @@ export const getHistory = async (req, res, next) => {
       logs.push({ _id: doc.id, ...doc.data() });
     });
 
-    // Client-side search (since Firestore doesn't do substring matching easily)
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       logs = logs.filter(log => log.symbol && log.symbol.toLowerCase().includes(term));
     }
 
-    // Manual Sorting
     logs.sort((a, b) => {
       let valA = a[sortKey] || '';
       let valB = b[sortKey] || '';
@@ -64,8 +60,32 @@ export const getHistory = async (req, res, next) => {
     const startIndex = (pageNum - 1) * limitNum;
     const paginatedLogs = logs.slice(startIndex, startIndex + limitNum);
 
+    // REAL TIME VERIFICATION
+    const uniqueSymbols = [...new Set(paginatedLogs.map(l => l.symbol).filter(Boolean))];
+    const currentPrices = {};
+    for (const sym of uniqueSymbols) {
+      try {
+        const quote = await yahooFinance.quote(sym);
+        currentPrices[sym] = quote.regularMarketPrice;
+      } catch (err) {
+        currentPrices[sym] = null;
+      }
+    }
+
+    const verifiedLogs = paginatedLogs.map(log => {
+      let status = 'Pending';
+      const curPrice = currentPrices[log.symbol];
+      if (curPrice && log.currentPrice && log.prediction) {
+        if (log.prediction === 'BUY' && curPrice > log.currentPrice) status = 'Complied';
+        else if (log.prediction === 'SELL' && curPrice < log.currentPrice) status = 'Complied';
+        else if (log.prediction === 'HOLD' && Math.abs(curPrice - log.currentPrice)/log.currentPrice < 0.02) status = 'Complied';
+        else status = 'Failed';
+      }
+      return { ...log, status, actual: curPrice || log.currentPrice || 0 };
+    });
+
     res.json({
-      logs: paginatedLogs,
+      logs: verifiedLogs,
       total,
       page: pageNum,
       totalPages: Math.ceil(total / limitNum)
@@ -84,33 +104,48 @@ export const getHistory = async (req, res, next) => {
 export const getStats = async (req, res, next) => {
   try {
     const snapshot = await db.collection('predictions').get();
-    let total = snapshot.size;
+    let logs = [];
+    snapshot.forEach(doc => logs.push(doc.data()));
+
+    const uniqueSymbols = [...new Set(logs.map(l => l.symbol).filter(Boolean))];
+    const currentPrices = {};
+    // Fetch quotes in parallel to speed it up, limit to unique symbols
+    await Promise.all(uniqueSymbols.map(async (sym) => {
+      try {
+        const quote = await yahooFinance.quote(sym);
+        currentPrices[sym] = quote.regularMarketPrice;
+      } catch (err) {
+        currentPrices[sym] = null;
+      }
+    }));
+
+    let total = logs.length;
     let compliedCount = 0;
-    
     const assetStats = {};
-    
-    snapshot.forEach(doc => {
-      const log = doc.data();
-      if (log.status === 'Complied') {
-        compliedCount++;
+
+    logs.forEach(log => {
+      let status = 'Failed';
+      const curPrice = currentPrices[log.symbol];
+      if (curPrice && log.currentPrice && log.prediction) {
+        if (log.prediction === 'BUY' && curPrice > log.currentPrice) status = 'Complied';
+        else if (log.prediction === 'SELL' && curPrice < log.currentPrice) status = 'Complied';
+        else if (log.prediction === 'HOLD' && Math.abs(curPrice - log.currentPrice)/log.currentPrice < 0.02) status = 'Complied';
       }
       
+      if (status === 'Complied') compliedCount++;
+
       const sym = log.symbol;
       if (sym) {
-        if (!assetStats[sym]) {
-          assetStats[sym] = { total: 0, wins: 0 };
-        }
+        if (!assetStats[sym]) assetStats[sym] = { total: 0, wins: 0 };
         assetStats[sym].total += 1;
-        if (log.status === 'Complied') {
-          assetStats[sym].wins += 1;
-        }
+        if (status === 'Complied') assetStats[sym].wins += 1;
       }
     });
 
     const accuracy = total > 0 ? ((compliedCount / total) * 100).toFixed(1) : '0.0';
 
     let bestAsset = 'N/A';
-    let bestRate = 0;
+    let bestRate = -1;
     Object.entries(assetStats).forEach(([symbol, data]) => {
       const rate = data.wins / data.total;
       if (rate > bestRate) {
@@ -120,7 +155,7 @@ export const getStats = async (req, res, next) => {
     });
 
     res.json({
-      total: `${total + 1408} Run Cycles`,
+      total: `${total} Validated Cycles`,
       accuracy: `${accuracy}%`,
       bestStock: bestAsset !== 'N/A' ? `${bestAsset} (${(bestRate * 100).toFixed(0)}% Win)` : 'N/A',
       successRate: `${compliedCount} Wins / ${total - compliedCount} Losses`

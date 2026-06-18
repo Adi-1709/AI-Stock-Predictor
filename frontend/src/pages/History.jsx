@@ -245,7 +245,7 @@ export default function History() {
                       </span>
                     </td>
                     <td className="p-4 text-slate-205 font-bold">{log.confidence}%</td>
-                    <td className="p-4 text-slate-205 font-semibold">{formatCurrency(log.actual)}</td>
+                    <td className="p-4 text-slate-205 font-semibold">{formatCurrency(log.currentPrice || log.actual)}</td>
                     <td className="p-4">
                       <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[8px] font-extrabold uppercase ${
                         isComplied 

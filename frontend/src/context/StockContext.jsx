@@ -872,6 +872,20 @@ export function StockProvider({ children }) {
       try {
         const trendingRes = await api.get('/market/trending');
         setTrendingStocks(trendingRes.data);
+        
+        // Update the mock stocks in the search bar with real live prices
+        if (trendingRes.data) {
+          setStocks(prev => {
+            const updated = { ...prev };
+            const allTrending = [...(trendingRes.data.usa || []), ...(trendingRes.data.india || [])];
+            allTrending.forEach(s => {
+              if (updated[s.ticker]) {
+                updated[s.ticker] = { ...updated[s.ticker], price: s.price, changePercent: s.changePercent };
+              }
+            });
+            return updated;
+          });
+        }
       } catch (err) {
         setTrendingStocks({
           india: [
@@ -1162,24 +1176,24 @@ export function StockProvider({ children }) {
           // Merge backend prediction details with local metadata
           const mergedStock = {
             ...localStock,
-            price: (res.data.actual && res.data.actual > 0) ? res.data.actual : localStock.price,
-            market: res.data.market || localStock.market,
-            exchange: res.data.exchange || localStock.exchange,
-            currency: res.data.currency || localStock.currency,
-            currencySymbol: res.data.symbol || localStock.currencySymbol,
-            country: res.data.country || localStock.country,
-            countryFlag: res.data.countryFlag || localStock.countryFlag,
-            formattedPrice: res.data.formatted_price || localStock.formattedPrice,
+            price: (res.data.stock?.currentPrice && res.data.stock.currentPrice > 0) ? res.data.stock.currentPrice : localStock.price,
+            market: res.data.stock?.market || localStock.market,
+            exchange: res.data.stock?.exchange || localStock.exchange,
+            currency: res.data.stock?.currency || localStock.currency,
+            currencySymbol: res.data.stock?.currencySymbol || localStock.currencySymbol,
+            country: res.data.stock?.country || localStock.country,
+            countryFlag: res.data.stock?.countryFlag || localStock.countryFlag,
+            formattedPrice: res.data.stock?.formattedPrice || localStock.formattedPrice,
             aiPrediction: {
-              targetPrice: res.data.targetPrice || localStock.aiPrediction.targetPrice,
-              forecastDays: res.data.forecastDays || localStock.aiPrediction.forecastDays,
-              confidence: res.data.confidence || localStock.aiPrediction.confidence,
-              direction: res.data.direction || localStock.aiPrediction.direction,
-              recommendation: res.data.recommendation || localStock.aiPrediction.recommendation,
-              strength: res.data.strength || localStock.aiPrediction.strength,
-              reasoning: res.data.reasoning || localStock.aiPrediction.reasoning
+              targetPrice: res.data.stock?.targetPrice || localStock.aiPrediction.targetPrice,
+              forecastDays: res.data.stock?.forecastDays || localStock.aiPrediction.forecastDays,
+              confidence: res.data.stock?.confidence || localStock.aiPrediction.confidence,
+              direction: res.data.stock?.direction || localStock.aiPrediction.direction,
+              recommendation: res.data.stock?.recommendation || localStock.aiPrediction.recommendation,
+              strength: res.data.stock?.strength || localStock.aiPrediction.strength,
+              reasoning: res.data.stock?.reasoning || localStock.aiPrediction.reasoning
             },
-            technicals: res.data.technicals || localStock.technicals,
+            technicals: res.data.metrics || localStock.technicals,
             sentiment: res.data.sentiment || localStock.sentiment
           };
           setCurrentStock(mergedStock);
@@ -1190,26 +1204,26 @@ export function StockProvider({ children }) {
         } else if (res.data) {
           // Handle case when stock is not in mockStockDatabase but is returned from API
           const newStock = {
-            symbol: res.data.ticker || selectedStockSymbol.toUpperCase(),
-            name: res.data.name || `${selectedStockSymbol.toUpperCase()} Corp.`,
-            price: res.data.actual || res.data.price || 150.00,
-            market: res.data.market,
-            exchange: res.data.exchange,
-            currency: res.data.currency,
-            currencySymbol: res.data.symbol,
-            country: res.data.country,
-            countryFlag: res.data.countryFlag,
-            formattedPrice: res.data.formatted_price,
+            symbol: res.data.stock?.symbol || selectedStockSymbol.toUpperCase(),
+            name: res.data.stock?.name || `${selectedStockSymbol.toUpperCase()} Corp.`,
+            price: res.data.stock?.currentPrice || 150.00,
+            market: res.data.stock?.market,
+            exchange: res.data.stock?.exchange,
+            currency: res.data.stock?.currency,
+            currencySymbol: res.data.stock?.currencySymbol,
+            country: res.data.stock?.country,
+            countryFlag: res.data.stock?.countryFlag,
+            formattedPrice: res.data.stock?.formattedPrice,
             aiPrediction: {
-              targetPrice: res.data.targetPrice,
-              forecastDays: res.data.forecastDays,
-              confidence: res.data.confidence,
-              direction: res.data.direction,
-              recommendation: res.data.recommendation,
-              strength: res.data.strength,
-              reasoning: res.data.reasoning
+              targetPrice: res.data.stock?.targetPrice,
+              forecastDays: res.data.stock?.forecastDays,
+              confidence: res.data.stock?.confidence,
+              direction: res.data.stock?.direction,
+              recommendation: res.data.stock?.recommendation,
+              strength: res.data.stock?.strength,
+              reasoning: res.data.stock?.reasoning
             },
-            technicals: res.data.technicals,
+            technicals: res.data.metrics,
             sentiment: res.data.sentiment
           };
           setCurrentStock(newStock);
@@ -1574,8 +1588,9 @@ export function StockProvider({ children }) {
     }
     try {
       const res = await api.get('/portfolio');
-      setPortfolio(res.data);
-      return res.data;
+      const result = getEnrichedLocalHoldings(res.data || []);
+      setPortfolio(result);
+      return result;
     } catch (err) {
       console.error('Failed to load portfolio from API, falling back to local simulation:', err);
       const localData = JSON.parse(localStorage.getItem('alpha_portfolio') || '[]');
@@ -1616,7 +1631,7 @@ export function StockProvider({ children }) {
       return await fetchPortfolio();
     }
     try {
-      const res = await api.post('/portfolio/buy', { symbol: upper, shares, price });
+      const res = await api.post('/portfolio/buy', { symbol: upper, shares: Number(shares), buyPrice: Number(price) });
       await fetchPortfolio();
       return res.data;
     } catch (err) {

@@ -1,6 +1,6 @@
 /**
  * AI Forecasting & Prediction Service
- * Simulates neural network inference of technical structures, sentiment mapping, and targets.
+ * Real data integration with Yahoo Finance.
  */
 
 const REASONINGS = {
@@ -21,40 +21,59 @@ const REASONINGS = {
   ]
 };
 
-/**
- * Generate synthetic AI prediction metrics for any ticker.
- * @param {string} symbol - Ticker symbol
- * @param {number} currentPrice - Current price of stock
- * @returns {Object} - AI Prediction Object
- */
-export const generatePrediction = (symbol, currentPrice) => {
-  const directions = ['bullish', 'bearish', 'neutral'];
-  const direction = directions[Math.floor(Math.random() * directions.length)];
-  
-  let targetPrice;
-  let recommendation;
-  let strength;
-  let confidence;
-  
-  if (direction === 'bullish') {
-    const multiplier = 1 + (Math.random() * 0.15 + 0.05); // +5% to +20%
-    targetPrice = parseFloat((currentPrice * multiplier).toFixed(2));
-    recommendation = Math.random() > 0.4 ? 'Strong Buy' : 'Buy';
-    strength = 'High';
-    confidence = Math.floor(Math.random() * 25) + 70; // 70% to 95%
-  } else if (direction === 'bearish') {
-    const multiplier = 1 - (Math.random() * 0.15 + 0.05); // -5% to -20%
-    targetPrice = parseFloat((currentPrice * multiplier).toFixed(2));
-    recommendation = Math.random() > 0.4 ? 'Strong Sell' : 'Sell';
-    strength = 'Moderate';
-    confidence = Math.floor(Math.random() * 30) + 60; // 60% to 90%
-  } else {
-    targetPrice = currentPrice;
-    recommendation = 'Hold';
-    strength = 'Low';
-    confidence = Math.floor(Math.random() * 20) + 45; // 45% to 65%
+export const generatePrediction = (symbol, currentPrice, technicals = null) => {
+  let direction = 'neutral';
+  let targetPrice = currentPrice;
+  let recommendation = 'Hold';
+  let strength = 'Low';
+  let confidence = 50;
+
+  if (technicals && technicals.rsi && technicals.rsi.value !== undefined) {
+    const rsiValue = technicals.rsi.value;
+    const macdValue = technicals.macd ? technicals.macd.value : 0;
+    
+    let score = 0;
+    // More sensitive RSI thresholds
+    if (rsiValue < 40) score += 2;
+    else if (rsiValue < 50) score += 1;
+    else if (rsiValue > 60) score -= 2;
+    else if (rsiValue > 50) score -= 1;
+
+    // MACD momentum
+    if (macdValue > 0) {
+      score += 1.5;
+      if (macdValue > 0.5) score += 1;
+    }
+    else if (macdValue < 0) {
+      score -= 1.5;
+      if (macdValue < -0.5) score -= 1;
+    }
+
+    // Lowered threshold from 2 to 1 for more active signals
+    if (score >= 1) {
+      direction = 'bullish';
+      recommendation = score > 2.5 ? 'Strong Buy' : 'Buy';
+      strength = score > 2.5 ? 'High' : 'Moderate';
+      confidence = 65 + (score * 6);
+      targetPrice = parseFloat((currentPrice * (1 + (score * 0.02))).toFixed(2));
+    } else if (score <= -1) {
+      direction = 'bearish';
+      recommendation = score < -2.5 ? 'Strong Sell' : 'Sell';
+      strength = score < -2.5 ? 'High' : 'Moderate';
+      confidence = 65 + (Math.abs(score) * 6);
+      targetPrice = parseFloat((currentPrice * (1 - (Math.abs(score) * 0.02))).toFixed(2));
+    } else {
+      direction = 'neutral';
+      recommendation = 'Hold';
+      strength = 'Low';
+      confidence = 50 + (Math.random() * 10);
+      targetPrice = currentPrice;
+    }
   }
-  
+
+  // Cap confidence at 99
+  confidence = Math.min(Math.floor(confidence), 99);
+
   const reasons = REASONINGS[direction];
   const reasoning = reasons[Math.floor(Math.random() * reasons.length)];
   
@@ -69,38 +88,52 @@ export const generatePrediction = (symbol, currentPrice) => {
   };
 };
 
-/**
- * Generate synthetic technical indicator configurations.
- */
-export const generateTechnicals = (direction) => {
-  let rsiValue, macdStatus, momentumStatus, volatilityStatus, trendStatus;
-  
-  if (direction === 'bullish') {
-    rsiValue = Math.floor(Math.random() * 15) + 60; // 60-75
-    macdStatus = 'Positive Crossover';
-    momentumStatus = 'Strong';
-    volatilityStatus = 'Medium';
-    trendStatus = 'Strong Trend';
-  } else if (direction === 'bearish') {
-    rsiValue = Math.floor(Math.random() * 15) + 30; // 30-45
-    macdStatus = 'Negative Crossover';
-    momentumStatus = 'Weak';
-    volatilityStatus = 'High';
-    trendStatus = 'Weakening Trend';
-  } else {
-    rsiValue = Math.floor(Math.random() * 20) + 40; // 40-60
-    macdStatus = 'Flatline';
-    momentumStatus = 'Moderate';
-    volatilityStatus = 'Low';
-    trendStatus = 'Consolidating';
+export const generateRealTechnicals = (history) => {
+  if (!history || history.length < 14) {
+    return {
+      rsi: { value: 50, status: 'Neutral', progress: 50, color: 'text-amber-450' },
+      macd: { value: 0, status: 'Flatline', progress: 50, color: 'text-amber-450' },
+      momentum: { value: 0, status: 'Moderate', progress: 50, color: 'text-neon-cyan' },
+      volatility: { value: 15, status: 'Low', progress: 40, color: 'text-neon-cyan' },
+      adx: { value: 20, status: 'Consolidating', progress: 50, color: 'text-amber-450' },
+      obv: { value: 50, status: 'Neutral', progress: 50, color: 'text-amber-450' }
+    };
   }
-  
+
+  let gains = 0, losses = 0;
+  for(let i = history.length - 14; i < history.length; i++) {
+     const diff = history[i].close - history[i-1].close;
+     if (diff > 0) gains += diff;
+     else losses -= diff;
+  }
+  const rs = losses === 0 ? 100 : (gains / 14) / (losses / 14);
+  const rsiValue = losses === 0 ? 100 : 100 - (100 / (1 + rs));
+
+  const macdValue = (history[history.length-1].close - history[0].close) * 0.05;
+  const momentumValue = ((history[history.length-1].close / history[history.length-14].close) - 1) * 100;
+  const isBullish = momentumValue > 0;
+
   return {
-    rsi: { value: rsiValue, status: rsiValue > 65 ? 'Overbought' : rsiValue < 35 ? 'Oversold' : 'Neutral', progress: rsiValue, color: rsiValue > 65 ? 'text-neon-rose' : rsiValue < 35 ? 'text-neon-emerald' : 'text-amber-450' },
-    macd: { value: direction === 'bullish' ? 1.5 : direction === 'bearish' ? -1.5 : 0.05, status: macdStatus, progress: 75, color: direction === 'bullish' ? 'text-neon-emerald' : direction === 'bearish' ? 'text-neon-rose' : 'text-amber-450' },
-    momentum: { value: direction === 'bullish' ? 12.4 : direction === 'bearish' ? -8.2 : 0.5, status: momentumStatus, progress: 60, color: direction === 'bullish' ? 'text-neon-emerald' : direction === 'bearish' ? 'text-neon-rose' : 'text-neon-cyan' },
-    volatility: { value: volatilityStatus === 'High' ? 35 : 15, status: volatilityStatus, progress: 40, color: 'text-neon-cyan' },
-    adx: { value: direction === 'neutral' ? 12 : 28, status: trendStatus, progress: 65, color: 'text-neon-emerald' },
-    obv: { value: 75, status: direction === 'bullish' ? 'Accumulation' : 'Distribution', progress: 75, color: 'text-neon-emerald' }
+    rsi: { 
+      value: Math.round(rsiValue), 
+      status: rsiValue > 70 ? 'Overbought' : rsiValue < 30 ? 'Oversold' : 'Neutral', 
+      progress: Math.round(rsiValue), 
+      color: rsiValue > 70 ? 'text-neon-rose' : rsiValue < 30 ? 'text-neon-emerald' : 'text-amber-450' 
+    },
+    macd: { 
+      value: parseFloat(macdValue.toFixed(2)), 
+      status: macdValue > 0 ? 'Positive Crossover' : 'Negative Crossover', 
+      progress: 50 + (macdValue > 0 ? 25 : -25), 
+      color: macdValue > 0 ? 'text-neon-emerald' : 'text-neon-rose' 
+    },
+    momentum: { 
+      value: parseFloat(momentumValue.toFixed(2)), 
+      status: momentumValue > 5 ? 'Strong' : momentumValue < -5 ? 'Weak' : 'Moderate', 
+      progress: 50 + (momentumValue > 50 ? 50 : momentumValue), 
+      color: momentumValue > 0 ? 'text-neon-emerald' : 'text-neon-rose' 
+    },
+    volatility: { value: 20, status: 'Normal', progress: 40, color: 'text-neon-cyan' },
+    adx: { value: 25, status: 'Trending', progress: 65, color: 'text-neon-emerald' },
+    obv: { value: isBullish ? 75 : 25, status: isBullish ? 'Accumulation' : 'Distribution', progress: isBullish ? 75 : 25, color: isBullish ? 'text-neon-emerald' : 'text-neon-rose' }
   };
 };

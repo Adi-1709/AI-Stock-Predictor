@@ -1,5 +1,5 @@
 import express from 'express';
-import dotenv from 'dotenv';
+import 'dotenv/config';
 import cors from 'cors';
 import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 
@@ -15,8 +15,6 @@ import predictRoutes from './routes/predictRoutes.js';
 import portfolioRoutes from './routes/portfolioRoutes.js';
 import alertRoutes from './routes/alertRoutes.js';
 import marketRoutes from './routes/marketRoutes.js';
-
-dotenv.config();
 
 const app = express();
 
