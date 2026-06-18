@@ -1520,12 +1520,19 @@ export function StockProvider({ children }) {
 
   const [portfolio, setPortfolio] = useState({
     holdings: [],
-    summary: { totalInvested: 0, totalCurrent: 0, totalProfitLoss: 0, totalPercentageReturn: 0 }
+    summary: {
+      USD: { totalInvested: 0, totalCurrent: 0, totalProfitLoss: 0, totalPercentageReturn: 0 },
+      INR: { totalInvested: 0, totalCurrent: 0, totalProfitLoss: 0, totalPercentageReturn: 0 },
+      aggregateProfitLoss: 0
+    }
   });
 
   const getEnrichedLocalHoldings = (holdingsList) => {
-    let totalInvested = 0;
-    let totalCurrent = 0;
+    let totalInvestedUSD = 0;
+    let totalCurrentUSD = 0;
+    let totalInvestedINR = 0;
+    let totalCurrentINR = 0;
+
     const enriched = holdingsList.map(h => {
       const sym = h.symbol.toUpperCase();
       const stockMeta = stocks[sym] || mockStockDatabase[sym];
@@ -1535,14 +1542,16 @@ export function StockProvider({ children }) {
       const profitLoss = currentValue - investedValue;
       const percentageReturn = investedValue > 0 ? (profitLoss / investedValue) * 100 : 0;
       
-      totalInvested += investedValue;
-      totalCurrent += currentValue;
-
       let currencySymbol = '$';
       let currency = 'USD';
       if (sym.endsWith('.NS') || sym.endsWith('.BO')) {
         currencySymbol = '₹';
         currency = 'INR';
+        totalInvestedINR += investedValue;
+        totalCurrentINR += currentValue;
+      } else {
+        totalInvestedUSD += investedValue;
+        totalCurrentUSD += currentValue;
       }
 
       return {
@@ -1553,7 +1562,9 @@ export function StockProvider({ children }) {
         currentValue: parseFloat(currentValue.toFixed(2)),
         profitLoss: parseFloat(profitLoss.toFixed(2)),
         percentageReturn: parseFloat(percentageReturn.toFixed(2)),
-        symbol: currencySymbol,
+        symbol: sym,
+        currencySymbol: currencySymbol,
+        name: stockMeta ? stockMeta.name : sym,
         currency,
         exchange: sym.endsWith('.NS') ? 'NSE' : 'NASDAQ',
         market: sym.endsWith('.NS') ? 'India' : 'USA',
@@ -1562,16 +1573,32 @@ export function StockProvider({ children }) {
       };
     });
 
-    const totalProfitLoss = totalCurrent - totalInvested;
-    const totalPercentageReturn = totalInvested > 0 ? (totalProfitLoss / totalInvested) * 105 : 0; // standard mock return scaling
+    const totalProfitLossUSD = totalCurrentUSD - totalInvestedUSD;
+    const totalPercentageReturnUSD = totalInvestedUSD > 0 ? (totalProfitLossUSD / totalInvestedUSD) * 100 : 0;
+    const totalProfitLossINR = totalCurrentINR - totalInvestedINR;
+    const totalPercentageReturnINR = totalInvestedINR > 0 ? (totalProfitLossINR / totalInvestedINR) * 100 : 0;
+
+    // Create an aggregate metric by converting USD to INR for backward compatibility or color logic if needed,
+    // though the UI will use separated values now.
+    const mockConversionRate = 83;
+    const aggregateProfitLoss = totalProfitLossINR + (totalProfitLossUSD * mockConversionRate);
 
     return {
       holdings: enriched,
       summary: {
-        totalInvested: parseFloat(totalInvested.toFixed(2)),
-        totalCurrent: parseFloat(totalCurrent.toFixed(2)),
-        totalProfitLoss: parseFloat(totalProfitLoss.toFixed(2)),
-        totalPercentageReturn: parseFloat(totalPercentageReturn.toFixed(2))
+        USD: {
+          totalInvested: parseFloat(totalInvestedUSD.toFixed(2)),
+          totalCurrent: parseFloat(totalCurrentUSD.toFixed(2)),
+          totalProfitLoss: parseFloat(totalProfitLossUSD.toFixed(2)),
+          totalPercentageReturn: parseFloat(totalPercentageReturnUSD.toFixed(2))
+        },
+        INR: {
+          totalInvested: parseFloat(totalInvestedINR.toFixed(2)),
+          totalCurrent: parseFloat(totalCurrentINR.toFixed(2)),
+          totalProfitLoss: parseFloat(totalProfitLossINR.toFixed(2)),
+          totalPercentageReturn: parseFloat(totalPercentageReturnINR.toFixed(2))
+        },
+        aggregateProfitLoss
       }
     };
   };

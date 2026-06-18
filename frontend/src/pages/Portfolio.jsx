@@ -315,45 +315,65 @@ export default function Portfolio() {
               {[
                 {
                   label: 'Simulated Asset Value',
-                  value: formatCurrency(portfolio.summary.totalCurrent, 'INR'),
+                  valueUSD: formatCurrency(portfolio.summary.USD?.totalCurrent || 0, 'USD'),
+                  valueINR: formatCurrency(portfolio.summary.INR?.totalCurrent || 0, 'INR'),
                   color: 'text-slate-100',
                   glow: 'rgba(255,255,255,0.03)',
                   bar: 'from-slate-600 to-slate-800'
                 },
                 {
                   label: 'Total Capital Invested',
-                  value: formatCurrency(portfolio.summary.totalInvested, 'INR'),
+                  valueUSD: formatCurrency(portfolio.summary.USD?.totalInvested || 0, 'USD'),
+                  valueINR: formatCurrency(portfolio.summary.INR?.totalInvested || 0, 'INR'),
                   color: 'text-neon-cyan',
                   glow: 'rgba(0,240,255,0.05)',
                   bar: 'from-neon-cyan/50 to-neon-cyan'
                 },
                 {
                   label: 'Net Profits & Losses',
-                  value: `${portfolio.summary.totalProfitLoss >= 0 ? '+' : ''}${formatCurrency(portfolio.summary.totalProfitLoss, 'INR')}`,
-                  color: portfolio.summary.totalProfitLoss >= 0 ? 'text-neon-emerald' : 'text-neon-rose',
-                  glow: portfolio.summary.totalProfitLoss >= 0 ? 'rgba(0,255,102,0.06)' : 'rgba(255,45,85,0.06)',
-                  bar: portfolio.summary.totalProfitLoss >= 0 ? 'from-neon-emerald/50 to-neon-emerald' : 'from-neon-rose/50 to-neon-rose'
+                  valueUSD: `${(portfolio.summary.USD?.totalProfitLoss || 0) >= 0 ? '+' : ''}${formatCurrency(portfolio.summary.USD?.totalProfitLoss || 0, 'USD')}`,
+                  valueINR: `${(portfolio.summary.INR?.totalProfitLoss || 0) >= 0 ? '+' : ''}${formatCurrency(portfolio.summary.INR?.totalProfitLoss || 0, 'INR')}`,
+                  colorUSD: (portfolio.summary.USD?.totalProfitLoss || 0) >= 0 ? 'text-neon-emerald' : 'text-neon-rose',
+                  colorINR: (portfolio.summary.INR?.totalProfitLoss || 0) >= 0 ? 'text-neon-emerald' : 'text-neon-rose',
+                  glow: (portfolio.summary.aggregateProfitLoss || 0) >= 0 ? 'rgba(0,255,102,0.06)' : 'rgba(255,45,85,0.06)',
+                  bar: (portfolio.summary.aggregateProfitLoss || 0) >= 0 ? 'from-neon-emerald/50 to-neon-emerald' : 'from-neon-rose/50 to-neon-rose'
                 },
                 {
                   label: 'Total Percentage Returns',
-                  value: `${portfolio.summary.totalProfitLoss >= 0 ? '+' : ''}${portfolio.summary.totalPercentageReturn.toFixed(2)}%`,
-                  color: portfolio.summary.totalProfitLoss >= 0 ? 'text-neon-emerald' : 'text-neon-rose',
-                  glow: portfolio.summary.totalProfitLoss >= 0 ? 'rgba(0,255,102,0.06)' : 'rgba(255,45,85,0.06)',
-                  bar: portfolio.summary.totalProfitLoss >= 0 ? 'from-neon-emerald/50 to-neon-emerald' : 'from-neon-rose/50 to-neon-rose'
+                  valueUSD: `${(portfolio.summary.USD?.totalProfitLoss || 0) >= 0 ? '+' : ''}${(portfolio.summary.USD?.totalPercentageReturn || 0).toFixed(2)}%`,
+                  valueINR: `${(portfolio.summary.INR?.totalProfitLoss || 0) >= 0 ? '+' : ''}${(portfolio.summary.INR?.totalPercentageReturn || 0).toFixed(2)}%`,
+                  colorUSD: (portfolio.summary.USD?.totalProfitLoss || 0) >= 0 ? 'text-neon-emerald' : 'text-neon-rose',
+                  colorINR: (portfolio.summary.INR?.totalProfitLoss || 0) >= 0 ? 'text-neon-emerald' : 'text-neon-rose',
+                  glow: (portfolio.summary.aggregateProfitLoss || 0) >= 0 ? 'rgba(0,255,102,0.06)' : 'rgba(255,45,85,0.06)',
+                  bar: (portfolio.summary.aggregateProfitLoss || 0) >= 0 ? 'from-neon-emerald/50 to-neon-emerald' : 'from-neon-rose/50 to-neon-rose'
                 }
-              ].map((stat, i) => (
-                <div
-                  key={i}
-                  className="glass-card rounded-2xl p-4 sm:p-5 relative border border-slate-900/60 overflow-hidden"
-                  style={{ boxShadow: `0 4px 20px -2px ${stat.glow}` }}
-                >
-                  <div className={`absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r ${stat.bar} to-transparent`} />
-                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">{stat.label}</span>
-                  <span className={`text-base sm:text-lg lg:text-xl font-black tracking-tight leading-none block ${stat.color}`}>
-                    {stat.value}
-                  </span>
-                </div>
-              ))}
+              ].map((stat, i) => {
+                const showUSD = (portfolio.summary.USD?.totalInvested > 0 || portfolio.summary.USD?.totalCurrent > 0) || (!portfolio.summary.INR?.totalInvested && !portfolio.summary.INR?.totalCurrent);
+                const showINR = portfolio.summary.INR?.totalInvested > 0 || portfolio.summary.INR?.totalCurrent > 0;
+
+                return (
+                  <div
+                    key={i}
+                    className="glass-card rounded-2xl p-4 sm:p-5 relative border border-slate-900/60 overflow-hidden"
+                    style={{ boxShadow: `0 4px 20px -2px ${stat.glow}` }}
+                  >
+                    <div className={`absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r ${stat.bar} to-transparent`} />
+                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-wider block mb-2">{stat.label}</span>
+                    <div className="flex flex-col gap-1.5">
+                      {showUSD && (
+                        <span className={`text-base sm:text-lg lg:text-xl font-black tracking-tight leading-none flex items-baseline gap-1.5 ${stat.colorUSD || stat.color}`}>
+                          {stat.valueUSD} {showINR && <span className="text-[9px] text-slate-500 font-bold uppercase">USD</span>}
+                        </span>
+                      )}
+                      {showINR && (
+                        <span className={`text-base sm:text-lg lg:text-xl font-black tracking-tight leading-none flex items-baseline gap-1.5 ${stat.colorINR || stat.color}`}>
+                          {stat.valueINR} {showUSD && <span className="text-[9px] text-slate-500 font-bold uppercase">INR</span>}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Holdings Table */}
@@ -402,13 +422,18 @@ export default function Portfolio() {
                           <tr key={i} className="hover:bg-slate-900/20 transition-colors group">
                             {/* Asset */}
                             <td className="py-3 px-4 font-black">
-                              <div className="flex items-center gap-2">
-                                <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-900 text-[8px] text-slate-100">
-                                  {h.symbol}
-                                </span>
-                                <span className="text-[10px] text-slate-400 font-bold uppercase shrink-0">
-                                  {h.countryFlag} {h.exchange}
-                                </span>
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-900 text-[8px] text-slate-100">
+                                    {h.symbol}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 font-bold uppercase shrink-0">
+                                    {h.countryFlag} {h.exchange}
+                                  </span>
+                                </div>
+                                <div className="text-[10px] text-slate-400 font-medium truncate max-w-[140px]" title={h.name}>
+                                  {h.name}
+                                </div>
                               </div>
                             </td>
                             {/* Size */}
