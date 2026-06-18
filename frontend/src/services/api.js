@@ -35,10 +35,15 @@ api.interceptors.response.use(
 
   (error) => {
     if (error.response?.status === 401) {
-
       localStorage.removeItem('user');
 
-      window.location.href = '/login';
+      // Prevent redirect loops if the user is already on a public/guest page
+      const currentPath = window.location.pathname.replace(/\/$/, '') || '/';
+      const publicPaths = ['/login', '/register', '/forgot-password', '/'];
+      
+      if (!publicPaths.includes(currentPath)) {
+        window.location.href = '/login';
+      }
     }
 
     return Promise.reject(error);
