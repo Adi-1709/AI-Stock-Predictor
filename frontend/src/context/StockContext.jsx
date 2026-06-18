@@ -1122,7 +1122,7 @@ export function StockProvider({ children }) {
                 market: item.market || updated[symbol].market,
                 exchange: item.exchange || updated[symbol].exchange,
                 currency: item.currency || updated[symbol].currency,
-                currencySymbol: item.symbol || updated[symbol].currencySymbol,
+                currencySymbol: item.currencySymbol || updated[symbol].currencySymbol,
                 country: item.country || updated[symbol].country,
                 countryFlag: item.countryFlag || updated[symbol].countryFlag,
                 formattedPrice: item.formatted_price || updated[symbol].formattedPrice
@@ -1137,7 +1137,7 @@ export function StockProvider({ children }) {
                 market: item.market,
                 exchange: item.exchange,
                 currency: item.currency,
-                currencySymbol: item.symbol,
+                currencySymbol: item.currencySymbol || '$',
                 country: item.country,
                 countryFlag: item.countryFlag,
                 formattedPrice: item.formatted_price,

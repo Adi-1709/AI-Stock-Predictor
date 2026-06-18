@@ -42,7 +42,7 @@ export const getMarketData = (symbol, price) => {
     market,
     exchange,
     currency,
-    symbol: currencySymbol,
+    currencySymbol,
     country,
     countryFlag,
     formatted_price
